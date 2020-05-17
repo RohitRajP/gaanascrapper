@@ -35,14 +35,16 @@ const fetchHtmlContent = async (playlistUrl) => {
   try {
     // initializing puppeteer instance
     const browser = await puppeteer.launch({
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: ["--no-sandbox", "--disable-setuid-sandbox", '--uses-proxy=http://49.248.17.94:8080'],
     });
 
     // navigate to the playlist page
     const page = await browser.newPage();
 
     // navigating to playlist page and waiting till the page loads
-    await page.goto(playlistUrl, { waitUntil: "networkidle2" });
+    await page.goto(playlistUrl, {
+      waitUntil: "networkidle2"
+    });
 
     // getting html content of the page
     const html = await page.content();
@@ -150,7 +152,9 @@ const getPlaylistInformation = async (htmlContent) => {
       songsList = await getSongsListFilmStructure($);
 
     // creating album object
-    const albumObj = { albumTitle: albumTitle };
+    const albumObj = {
+      albumTitle: albumTitle
+    };
     // pushing album songs into albumObj
     albumObj["songsList"] = songsList;
     // returning data
