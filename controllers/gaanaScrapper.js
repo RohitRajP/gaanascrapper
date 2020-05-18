@@ -34,13 +34,8 @@ const logConsole = (message) => {
 };
 
 // waits and fetches the html content of the url
-const fetchHtmlContent = async (playlistUrl) => {
+const fetchHtmlContent = async (playlistUrl, browser) => {
   try {
-    // initializing puppeteer instance
-    const browser = await puppeteer.launch({
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-
     // navigate to the playlist page
     const page = await browser.newPage();
 
@@ -173,29 +168,46 @@ const getPlaylistInformation = async (htmlContent) => {
 };
 
 // fetches the list of proxy IPs from the ip hosting site
-const getListofProxies = async (proxyIPHost) => {
+const getListofProxies = async (proxyIPHost, browser) => {
+  // holds the list of ip address list
+  const ipAddressList = [];
   try {
-    // initiating request to get the proxy IPs
-    const requestResponse = await axios.get(proxyIPHost);
-    // check if the valid response if received
-    if (requestResponse.status === 200) {
-      // getting the html data
-      const responseData = requestResponse.data;
 
-      // loading html content into cheerio
-      const $ = cheerio.load(responseData);
+    // creating page to get the ip addresses
+    const page = await browser.newPage();
 
-      // fetch the table containing all the IP address values
-      const pageBody = $($($('body').find('table').toArray()[1]).find('table').toArray()[0]).find('tr');
+    // navigating to playlist page and waiting till the page loads
+    await page.goto(proxyIPHost, {
+      waitUntil: "networkidle2",
+      timeout: 0
+    });
 
-      fs.writeFile("sample.html", pageBody, (err) => {
-        if (err) logConsole(err);
-      });
+    // getting html content of the page
+    const responseData = await page.content();
+    logConsole("Webpage data fetched");
 
-    } else {
-      logConsole("Not getting valid content from the ip hosting website");
-      return null;
+    // loading html content into cheerio
+    const $ = cheerio.load(responseData);
+
+    // fetch the table rows containing all the IP address values
+    const tableRows = $($($('body').find('table').toArray()[1]).find('table').toArray()[0]).find('tr').toArray();
+
+    // iterating through all the ip address table rows
+    for (let i = 3; i < tableRows.length; i++) {
+
+      // getting the ip address from the table
+      let ipAddress = $($(tableRows[i]).find('td').toArray()[0]).find('font').text();
+      // getting the type of proxy
+      let ipProtocol = $($(tableRows[i]).find('td').toArray()[1]).find('a').find('font').text();
+      // checking if valid ipaddress is returned
+      if (ipAddress.length > 0 && ipProtocol == "HTTP") {
+        // adding ip address to list
+        ipAddressList.push(ipAddress);
+      }
     }
+
+    logConsole(ipAddressList);
+
   } catch (error) {
     logConsole("Error in getting the list of proxies: " + error);
     return null;
@@ -210,6 +222,11 @@ module.exports.getGaanaSongs = async (req, res, next) => {
   const proxyIPHost = "http://spys.one/free-proxy-list/IN/";
 
   try {
+    // initializing puppeteer instance
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
     // setting global instance of res
     globalRes = res;
 
@@ -218,14 +235,16 @@ module.exports.getGaanaSongs = async (req, res, next) => {
     logConsole("Recieved playlist url: " + playlistUrl);
 
     // fetches the list of proxy IPs from the ip hosting site
-    const listOfProxies = await getListofProxies(proxyIPHost);
+    const listOfProxies = await getListofProxies(proxyIPHost, browser);
 
     sendResponse("Completed", 0);
+
+    browser.close();
 
     // // checking if playlist has been passed
     // if (playlistUrl !== null) {
     //   // fetching html content for the playlist url
-    //   const htmlContent = await fetchHtmlContent(playlistUrl);
+    //   const htmlContent = await fetchHtmlContent(playlistUrl, browser);
     //   logConsole("Fetched Html content");
     //   // checking if html content has been recieved
     //   if (htmlContent !== null) {
