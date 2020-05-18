@@ -2,6 +2,8 @@
 const puppeteer = require("puppeteer");
 const cheerio = require("cheerio");
 const useProxy = require('puppeteer-page-proxy');
+const fs = require("fs");
+const axios = require("axios");
 
 // global instance of response object
 let globalRes;
@@ -170,42 +172,84 @@ const getPlaylistInformation = async (htmlContent) => {
   }
 };
 
+// fetches the list of proxy IPs from the ip hosting site
+const getListofProxies = async (proxyIPHost) => {
+  try {
+    // initiating request to get the proxy IPs
+    const requestResponse = await axios.get(proxyIPHost);
+    // check if the valid response if received
+    if (requestResponse.status === 200) {
+      // getting the html data
+      const responseData = requestResponse.data;
+
+      // loading html content into cheerio
+      const $ = cheerio.load(responseData);
+
+      // fetch the table containing all the IP address values
+      const pageBody = $($($('body').find('table').toArray()[1]).find('table').toArray()[0]).find('tr');
+
+      fs.writeFile("sample.html", pageBody, (err) => {
+        if (err) logConsole(err);
+      });
+
+    } else {
+      logConsole("Not getting valid content from the ip hosting website");
+      return null;
+    }
+  } catch (error) {
+    logConsole("Error in getting the list of proxies: " + error);
+    return null;
+  }
+
+};
+
 // gets the list of songs from playlist url
 module.exports.getGaanaSongs = async (req, res, next) => {
+
+  // holds the proxy IP hosting site
+  const proxyIPHost = "http://spys.one/free-proxy-list/IN/";
+
   try {
     // setting global instance of res
     globalRes = res;
 
     // getting the playlist url
     const playlistUrl = req.query.playlisturl;
+    logConsole("Recieved playlist url: " + playlistUrl);
 
-    // checking if playlist has been passed
-    if (playlistUrl !== null) {
-      // fetching html content for the playlist url
-      const htmlContent = await fetchHtmlContent(playlistUrl);
+    // fetches the list of proxy IPs from the ip hosting site
+    const listOfProxies = await getListofProxies(proxyIPHost);
 
-      // checking if html content has been recieved
-      if (htmlContent !== null) {
-        // get playlist information from the html content
-        const playlistInformation = await getPlaylistInformation(htmlContent);
-        // checking if the songList has been returned
-        if (playlistInformation !== null) {
-          logConsole("Sent response to client");
-          // sending response to client
-          sendResponse(playlistInformation, 1);
-        } else {
-          logConsole("Could not get playlist information from the url");
-          // sending response to client
-          sendResponse("Could not net playtlist information from the url", 0);
-        }
-      } else {
-        logConsole("No html content recieved for the playlist url");
-        sendResponse("No html content recieved for the playlist url", 0);
-      }
-    } else {
-      logConsole("No playlist url recieved");
-      sendResponse("No playlist url recieved", 0);
-    }
+    sendResponse("Completed", 0);
+
+    // // checking if playlist has been passed
+    // if (playlistUrl !== null) {
+    //   // fetching html content for the playlist url
+    //   const htmlContent = await fetchHtmlContent(playlistUrl);
+    //   logConsole("Fetched Html content");
+    //   // checking if html content has been recieved
+    //   if (htmlContent !== null) {
+    //     // get playlist information from the html content
+    //     const playlistInformation = await getPlaylistInformation(htmlContent);
+    //     logConsole("Got playlist information");
+    //     // checking if the songList has been returned
+    //     if (playlistInformation !== null) {
+    //       logConsole("Sent response to client");
+    //       // sending response to client
+    //       sendResponse(playlistInformation, 1);
+    //     } else {
+    //       logConsole("Could not get playlist information from the url");
+    //       // sending response to client
+    //       sendResponse("Could not net playtlist information from the url", 0);
+    //     }
+    //   } else {
+    //     logConsole("No html content recieved for the playlist url");
+    //     sendResponse("No html content recieved for the playlist url", 0);
+    //   }
+    // } else {
+    //   logConsole("No playlist url recieved");
+    //   sendResponse("No playlist url recieved", 0);
+    // }
   } catch (error) {
     console.log("Main method error: ", error);
     sendResponse("Internal server error: " + error, 0);
